@@ -1,6 +1,20 @@
 [package]
 name = "delta-theta"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[lib]
+name = "delta_theta"
+crate-type = ["cdylib"]
 
 [dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+polars = { version = "0.46", features = ["lazy"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ndarray = "0.16"
+
+# NOTE: NautilusTrader integration is handled on the Python side via the
+# `nautilus_trader` package. There are no standalone nautilus-core /
+# nautilus-backtest crates on crates.io.

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "delta-theta"
+version = "0.1.0"
+description = "Q-Learned Delta-Theta Matrix Integration for algorithmic options trading"
+requires-python = ">=3.10"
+dependencies = [
+    "nautilus_trader>=1.200.0",
+    "stable-baselines3>=2.3.0",
+    "gymnasium>=1.0.0",
+    "numpy>=1.26.0",
+    "polars>=1.0.0",
+    "torch>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "maturin>=1.7",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "delta_theta"
