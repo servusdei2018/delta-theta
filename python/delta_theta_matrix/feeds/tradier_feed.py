@@ -31,7 +31,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-import httpx
+import pyreqwest_impersonate as pyreqwests
 
 from delta_theta_matrix.live import MarketDataFeed
 
@@ -70,7 +70,7 @@ class TradierFeed(MarketDataFeed):
 
         self._base_url = _SANDBOX_BASE if self._sandbox else _PRODUCTION_BASE
         self._timeout = timeout
-        self._client: httpx.Client | None = None
+        self._client: pyreqwests.Client | None = None
         self._subscribed_symbols: list[str] = []
         self._tick_callbacks: list[Callable[[dict[str, Any]], None]] = []
 
@@ -78,8 +78,7 @@ class TradierFeed(MarketDataFeed):
 
     def connect(self) -> None:
         """Open an HTTP client session to Tradier."""
-        self._client = httpx.Client(
-            base_url=self._base_url,
+        self._client = pyreqwests.Client(
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Accept": "application/json",
@@ -92,7 +91,6 @@ class TradierFeed(MarketDataFeed):
     def disconnect(self) -> None:
         """Close the HTTP client session."""
         if self._client is not None:
-            self._client.close()
             self._client = None
         logger.info("TradierFeed disconnected")
 
@@ -142,7 +140,7 @@ class TradierFeed(MarketDataFeed):
             "expiration": expiration,
             "greeks": str(greeks).lower(),
         }
-        resp = self._client.get("/markets/options/chains", params=params)
+        resp = self._client.get(f"{self._base_url}/markets/options/chains", params=params)
         resp.raise_for_status()
         data = resp.json()
 
@@ -167,7 +165,7 @@ class TradierFeed(MarketDataFeed):
         assert self._client is not None
 
         resp = self._client.get(
-            "/markets/options/expirations", params={"symbol": symbol}
+            f"{self._base_url}/markets/options/expirations", params={"symbol": symbol}
         )
         resp.raise_for_status()
         data = resp.json()
@@ -197,7 +195,7 @@ class TradierFeed(MarketDataFeed):
             raise ValueError("No symbols specified and none subscribed.")
 
         resp = self._client.get(
-            "/markets/quotes", params={"symbols": ",".join(syms)}
+            f"{self._base_url}/markets/quotes", params={"symbols": ",".join(syms)}
         )
         resp.raise_for_status()
         data = resp.json()
@@ -267,7 +265,7 @@ class TradierFeed(MarketDataFeed):
         if end:
             params["end"] = end
 
-        resp = self._client.get("/markets/history", params=params)
+        resp = self._client.get(f"{self._base_url}/markets/history", params=params)
         resp.raise_for_status()
         data = resp.json()
 
