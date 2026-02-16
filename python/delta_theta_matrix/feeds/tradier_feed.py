@@ -196,9 +196,7 @@ class TradierFeed(MarketDataFeed):
         if not syms:
             raise ValueError("No symbols specified and none subscribed.")
 
-        resp = self._client.get(
-            "/markets/quotes", params={"symbols": ",".join(syms)}
-        )
+        resp = self._client.get("/markets/quotes", params={"symbols": ",".join(syms)})
         resp.raise_for_status()
         data = resp.json()
 
