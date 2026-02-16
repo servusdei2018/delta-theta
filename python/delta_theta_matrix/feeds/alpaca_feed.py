@@ -43,8 +43,16 @@ _LIVE_TRADING_BASE = "https://api.alpaca.markets"
 _PAPER_TRADING_BASE = "https://paper-api.alpaca.markets"
 
 
+class AlpacaFeedError(Exception):
+    """Error raised by AlpacaFeed operations."""
+
+    pass
+
+
 class AlpacaFeed(MarketDataFeed):
     """Market data feed backed by the Alpaca Data API.
+
+    All HTTP calls include proper error handling — no bare unwrap/raise_for_status.
 
     Args:
         api_key: Alpaca API key ID. Falls back to ``ALPACA_API_KEY`` env var.
@@ -100,8 +108,12 @@ class AlpacaFeed(MarketDataFeed):
     def disconnect(self) -> None:
         """Close the HTTP client session."""
         if self._client is not None:
-            self._client.close()
-            self._client = None
+            try:
+                self._client.close()
+            except Exception:
+                logger.exception("Error closing Alpaca client")
+            finally:
+                self._client = None
         logger.info("AlpacaFeed disconnected")
 
     def subscribe(self, symbols: list[str]) -> None:
@@ -152,6 +164,9 @@ class AlpacaFeed(MarketDataFeed):
             List of option snapshot dicts with keys: symbol, underlying,
             strike, option_type, expiration_date, bid, ask, last, volume,
             open_interest, iv, greeks.
+
+        Raises:
+            AlpacaFeedError: If the HTTP request fails.
         """
         self._ensure_connected()
         assert self._client is not None
@@ -172,9 +187,20 @@ class AlpacaFeed(MarketDataFeed):
             params["type"] = option_type
 
         url = f"{self._data_base_url}/v1beta1/options/snapshots"
-        resp = self._client.get(url, params=params)
-        resp.raise_for_status()
-        data = resp.json()
+
+        try:
+            resp = self._client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error(
+                "Failed to fetch options chain for %s: %s",
+                underlying_symbol,
+                exc,
+            )
+            raise AlpacaFeedError(
+                f"Failed to fetch options chain for {underlying_symbol}: {exc}"
+            ) from exc
 
         snapshots = data.get("snapshots", {})
         results: list[dict[str, Any]] = []
@@ -211,6 +237,10 @@ class AlpacaFeed(MarketDataFeed):
         Returns:
             List of quote dicts with keys: symbol, bid, ask, last, volume,
             timestamp.
+
+        Raises:
+            AlpacaFeedError: If the HTTP request fails.
+            ValueError: If no symbols are specified.
         """
         self._ensure_connected()
         assert self._client is not None
@@ -220,9 +250,16 @@ class AlpacaFeed(MarketDataFeed):
             raise ValueError("No symbols specified and none subscribed.")
 
         url = f"{self._data_base_url}/v2/stocks/quotes/latest"
-        resp = self._client.get(url, params={"symbols": ",".join(syms)})
-        resp.raise_for_status()
-        data = resp.json()
+
+        try:
+            resp = self._client.get(url, params={"symbols": ",".join(syms)})
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error("Failed to fetch quotes for %s: %s", syms, exc)
+            raise AlpacaFeedError(
+                f"Failed to fetch quotes for {syms}: {exc}"
+            ) from exc
 
         quotes_map = data.get("quotes", {})
         normalized: list[dict[str, Any]] = []
@@ -253,8 +290,8 @@ class AlpacaFeed(MarketDataFeed):
             for cb in self._tick_callbacks:
                 try:
                     cb(tick)
-                except Exception as exc:
-                    logger.error("Tick callback error: %s", exc)
+                except Exception:
+                    logger.exception("Tick callback error")
 
         return normalized
 
@@ -278,6 +315,9 @@ class AlpacaFeed(MarketDataFeed):
         Returns:
             List of bar dicts with keys: timestamp, open, high, low, close,
             volume, vwap.
+
+        Raises:
+            AlpacaFeedError: If the HTTP request fails.
         """
         self._ensure_connected()
         assert self._client is not None
@@ -291,9 +331,16 @@ class AlpacaFeed(MarketDataFeed):
             params["limit"] = limit
 
         url = f"{self._data_base_url}/v2/stocks/{symbol}/bars"
-        resp = self._client.get(url, params=params)
-        resp.raise_for_status()
-        data = resp.json()
+
+        try:
+            resp = self._client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error("Failed to fetch history for %s: %s", symbol, exc)
+            raise AlpacaFeedError(
+                f"Failed to fetch history for {symbol}: {exc}"
+            ) from exc
 
         bars = data.get("bars", []) or []
         return [
@@ -312,5 +359,10 @@ class AlpacaFeed(MarketDataFeed):
     # ── Helpers ──────────────────────────────────────────────────────────
 
     def _ensure_connected(self) -> None:
+        """Ensure the client is connected.
+
+        Raises:
+            RuntimeError: If not connected.
+        """
         if self._client is None:
             raise RuntimeError("Not connected. Call connect() first.")

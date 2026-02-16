@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.11"]
+dev = ["ruff>=0.11", "pytest>=8.0"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]

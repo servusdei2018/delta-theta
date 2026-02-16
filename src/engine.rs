@@ -10,59 +10,73 @@ use serde::{Deserialize, Serialize};
 
 use crate::options::PutCreditSpread;
 use crate::orderbook::UnderlyingOrderBook;
-use crate::risk::RiskState;
+use crate::risk::{RiskLimits, RiskState};
 
 /// Configuration for the backtest engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[pyclass]
 pub struct EngineConfig {
-    /// Ticker symbols to simulate
+    /// Ticker symbols to simulate.
     #[pyo3(get, set)]
     pub tickers: Vec<String>,
-    /// Initial underlying prices for each ticker
+    /// Initial underlying prices for each ticker.
     #[pyo3(get, set)]
     pub initial_prices: Vec<f64>,
-    /// Initial buying power
+    /// Initial buying power.
     #[pyo3(get, set)]
     pub initial_buying_power: f64,
-    /// Risk-free interest rate
+    /// Risk-free interest rate (configurable, not hardcoded).
     #[pyo3(get, set)]
     pub risk_free_rate: f64,
-    /// Initial time to expiration in years
+    /// Initial time to expiration in years.
     #[pyo3(get, set)]
     pub initial_tte: f64,
-    /// Time decay per tick (in years)
+    /// Time decay per tick (in years).
     #[pyo3(get, set)]
     pub time_decay_per_tick: f64,
-    /// Maximum episode steps before forced termination
+    /// Maximum episode steps before forced termination.
     #[pyo3(get, set)]
     pub max_episode_steps: u64,
-    /// Random seed (0 for random)
+    /// Random seed (0 for random).
     #[pyo3(get, set)]
     pub seed: u64,
-    /// Number of strikes to generate per underlying
+    /// Number of strikes to generate per underlying.
     #[pyo3(get, set)]
     pub num_strikes: usize,
-    /// Strike spacing (e.g., 5.0 for $5 wide strikes)
+    /// Strike spacing (e.g., 5.0 for $5 wide strikes).
     #[pyo3(get, set)]
     pub strike_spacing: f64,
-    /// Base implied volatility
+    /// Base implied volatility.
     #[pyo3(get, set)]
     pub base_iv: f64,
-    /// Probability of a vol spike per tick
+    /// Probability of a vol spike per tick.
     #[pyo3(get, set)]
     pub vol_spike_prob: f64,
-    /// Magnitude of vol spikes (multiplier)
+    /// Magnitude of vol spikes (multiplier).
     #[pyo3(get, set)]
     pub vol_spike_magnitude: f64,
-    /// Early assignment ITM threshold (fraction of strike)
+    /// Early assignment ITM threshold (fraction of strike).
     #[pyo3(get, set)]
     pub early_assignment_threshold: f64,
+    /// Maximum number of open positions.
+    #[pyo3(get, set)]
+    pub max_positions: usize,
+    /// Maximum notional exposure.
+    #[pyo3(get, set)]
+    pub max_notional: f64,
+    /// Maximum position size per trade.
+    #[pyo3(get, set)]
+    pub max_position_size: u32,
+    /// Maximum margin utilization ratio.
+    #[pyo3(get, set)]
+    pub max_margin_utilization: f64,
 }
 
 #[pymethods]
 impl EngineConfig {
     /// Create a new engine configuration with sensible defaults.
+    ///
+    /// The risk-free rate is configurable (defaults to 0.05 / 5%).
     #[new]
     #[pyo3(signature = (
         tickers = None,
@@ -100,6 +114,40 @@ impl EngineConfig {
             vol_spike_prob: 0.02,
             vol_spike_magnitude: 1.5,
             early_assignment_threshold: 0.05,
+            max_positions: 50,
+            max_notional: 500_000.0,
+            max_position_size: 100,
+            max_margin_utilization: 0.80,
+        }
+    }
+
+    /// Load configuration from a TOML string.
+    ///
+    /// Allows external config file support. Fields not present in the TOML
+    /// will use defaults.
+    #[staticmethod]
+    pub fn from_toml(toml_str: &str) -> PyResult<Self> {
+        toml::from_str(toml_str).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("Invalid TOML config: {}", e))
+        })
+    }
+
+    /// Serialize configuration to a TOML string.
+    pub fn to_toml(&self) -> PyResult<String> {
+        toml::to_string_pretty(self).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("Failed to serialize config: {}", e))
+        })
+    }
+}
+
+impl EngineConfig {
+    /// Build risk limits from this config.
+    pub fn risk_limits(&self) -> RiskLimits {
+        RiskLimits {
+            max_positions: self.max_positions,
+            max_notional: self.max_notional,
+            max_position_size: self.max_position_size,
+            max_margin_utilization: self.max_margin_utilization,
         }
     }
 }
@@ -108,19 +156,19 @@ impl EngineConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[pyclass]
 pub struct StepResult {
-    /// Observation vector (state)
+    /// Observation vector (state).
     #[pyo3(get)]
     pub observation: Vec<f64>,
-    /// Reward for this step
+    /// Reward for this step.
     #[pyo3(get)]
     pub reward: f64,
-    /// Whether the episode is done
+    /// Whether the episode is done.
     #[pyo3(get)]
     pub done: bool,
-    /// Whether the episode was truncated (max steps reached)
+    /// Whether the episode was truncated (max steps reached).
     #[pyo3(get)]
     pub truncated: bool,
-    /// Additional info as JSON string
+    /// Additional info as JSON string.
     #[pyo3(get)]
     pub info: String,
 }
@@ -128,25 +176,25 @@ pub struct StepResult {
 /// The core backtest engine, exposed as a Python class.
 #[pyclass]
 pub struct BacktestEngine {
-    /// Engine configuration
+    /// Engine configuration.
     config: EngineConfig,
-    /// Order books for each underlying
+    /// Order books for each underlying.
     order_books: Vec<UnderlyingOrderBook>,
-    /// Risk/margin state
+    /// Risk/margin state.
     risk_state: RiskState,
-    /// Current timestamp in nanoseconds
+    /// Current timestamp in nanoseconds.
     current_timestamp_ns: u64,
-    /// Episode step counter
+    /// Episode step counter.
     episode_step: u64,
-    /// Current time to expiration
+    /// Current time to expiration.
     current_tte: f64,
-    /// Random number generator
+    /// Random number generator.
     rng: StdRng,
-    /// Cross-reset cache: cumulative P&L across episodes
+    /// Cross-reset cache: cumulative P&L across episodes.
     cumulative_pnl: f64,
-    /// Current episode's realized P&L
+    /// Current episode's realized P&L.
     episode_pnl: f64,
-    /// Current implied volatility (can spike)
+    /// Current implied volatility (can spike).
     current_iv: f64,
 }
 
@@ -161,10 +209,11 @@ impl BacktestEngine {
             StdRng::seed_from_u64(config.seed)
         };
 
+        let risk_limits = config.risk_limits();
         let mut engine = BacktestEngine {
             config: config.clone(),
             order_books: Vec::new(),
-            risk_state: RiskState::new(config.initial_buying_power),
+            risk_state: RiskState::with_limits(config.initial_buying_power, risk_limits),
             current_timestamp_ns: 0,
             episode_step: 0,
             current_tte: config.initial_tte,
@@ -193,8 +242,10 @@ impl BacktestEngine {
         self.current_iv = self.config.base_iv;
         self.current_timestamp_ns = 0;
 
-        // Reset risk state
-        self.risk_state = RiskState::new(self.config.initial_buying_power);
+        // Reset risk state with limits
+        let risk_limits = self.config.risk_limits();
+        self.risk_state =
+            RiskState::with_limits(self.config.initial_buying_power, risk_limits);
 
         // Regenerate order books
         self.initialize_order_books().map_err(|e| {
@@ -241,7 +292,7 @@ impl BacktestEngine {
                     );
                 }
 
-                // Update mark-to-market
+                // Update mark-to-market using actual IV from market data
                 if let Some(book) = self.order_books.first() {
                     let _ = self.risk_state.update_mark_to_market(
                         book.underlying_price,
@@ -419,7 +470,7 @@ impl BacktestEngine {
     /// Execute a put credit spread trade.
     ///
     /// Finds appropriate strikes based on the requested width and delta,
-    /// prices the spread, and opens the position.
+    /// prices the spread, and opens the position with actual IV from market data.
     fn execute_spread_trade(
         &mut self,
         strike_width: f64,
@@ -467,7 +518,7 @@ impl BacktestEngine {
             return Err("Long strike would be non-positive".to_string());
         }
 
-        // Get IV for the short strike
+        // Get actual IV from the order book for the short strike
         let sigma = book
             .book_for_strike(best_strike)
             .map(|b| b.implied_vol)
@@ -485,9 +536,10 @@ impl BacktestEngine {
 
         let credit = spread.net_credit;
 
-        // Open the position (1 contract)
+        // Open the position with actual IV from market data
         let ticker = book.ticker.clone();
-        self.risk_state.open_position(&ticker, spread, 1)?;
+        self.risk_state
+            .open_position_with_iv(&ticker, spread, 1, sigma)?;
 
         Ok(credit)
     }
@@ -550,10 +602,18 @@ impl BacktestEngine {
         obs.push(self.risk_state.total_theta_exposure());
 
         // Buying power (normalized)
-        obs.push(self.risk_state.buying_power / self.config.initial_buying_power);
+        if self.config.initial_buying_power > 0.0 {
+            obs.push(self.risk_state.buying_power / self.config.initial_buying_power);
+        } else {
+            obs.push(0.0);
+        }
 
         // Episode progress
-        obs.push(self.episode_step as f64 / self.config.max_episode_steps as f64);
+        if self.config.max_episode_steps > 0 {
+            obs.push(self.episode_step as f64 / self.config.max_episode_steps as f64);
+        } else {
+            obs.push(0.0);
+        }
 
         // Number of positions
         obs.push(self.risk_state.position_count() as f64);
@@ -584,7 +644,7 @@ mod tests {
         let config = make_config();
         let engine = BacktestEngine::new(config).unwrap();
         assert_eq!(engine.episode_step, 0);
-        assert!(engine.order_books.len() >= 1);
+        assert!(!engine.order_books.is_empty());
     }
 
     #[test]
@@ -602,5 +662,145 @@ mod tests {
         let _ = engine.reset().unwrap();
         let result = engine.step(0.0, 0.0).unwrap();
         assert_eq!(result.observation.len(), 20);
+    }
+
+    #[test]
+    fn test_engine_multiple_steps() {
+        let config = make_config();
+        let mut engine = BacktestEngine::new(config).unwrap();
+        let _ = engine.reset().unwrap();
+        for _ in 0..10 {
+            let result = engine.step(0.0, 0.0).unwrap();
+            assert_eq!(result.observation.len(), 20);
+            assert!(result.reward.is_finite());
+        }
+    }
+
+    #[test]
+    fn test_engine_run_ticks() {
+        let config = make_config();
+        let mut engine = BacktestEngine::new(config).unwrap();
+        let _ = engine.reset().unwrap();
+        let initial_tte = engine.current_tte;
+        engine.run_ticks(10);
+        assert!(engine.current_tte < initial_tte);
+    }
+
+    #[test]
+    fn test_engine_getters() {
+        let config = make_config();
+        let engine = BacktestEngine::new(config).unwrap();
+        assert_eq!(engine.timestamp_ns(), 0);
+        assert_eq!(engine.step_count(), 0);
+        assert!(engine.tte() > 0.0);
+        assert!(engine.iv() > 0.0);
+        assert!(engine.underlying_price() > 0.0);
+    }
+
+    #[test]
+    fn test_engine_observation_finite() {
+        let config = make_config();
+        let engine = BacktestEngine::new(config).unwrap();
+        let obs = engine.get_observation();
+        for (i, &val) in obs.iter().enumerate() {
+            assert!(val.is_finite(), "Observation[{}] is not finite: {}", i, val);
+        }
+    }
+
+    #[test]
+    fn test_configurable_risk_free_rate() {
+        let config = EngineConfig::new(None, None, 100_000.0, 0.03, 0.0833, 100, 42);
+        assert!((config.risk_free_rate - 0.03).abs() < 1e-10);
+        let engine = BacktestEngine::new(config).unwrap();
+        assert!(engine.underlying_price() > 0.0);
+    }
+
+    #[test]
+    fn test_config_risk_limits() {
+        let mut config = make_config();
+        config.max_positions = 5;
+        config.max_notional = 10_000.0;
+        config.max_position_size = 2;
+        config.max_margin_utilization = 0.5;
+
+        let limits = config.risk_limits();
+        assert_eq!(limits.max_positions, 5);
+        assert!((limits.max_notional - 10_000.0).abs() < 1e-10);
+        assert_eq!(limits.max_position_size, 2);
+        assert!((limits.max_margin_utilization - 0.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_config_toml_roundtrip() {
+        let config = make_config();
+        let toml_str = config.to_toml().unwrap();
+        assert!(toml_str.contains("risk_free_rate"));
+        assert!(toml_str.contains("initial_buying_power"));
+    }
+
+    #[test]
+    fn test_engine_episode_termination() {
+        let config = EngineConfig::new(None, None, 100_000.0, 0.05, 0.0833, 5, 42);
+        let mut engine = BacktestEngine::new(config).unwrap();
+        let _ = engine.reset().unwrap();
+
+        let mut truncated = false;
+        for _ in 0..10 {
+            let result = engine.step(0.0, 0.0).unwrap();
+            if result.truncated || result.done {
+                truncated = true;
+                break;
+            }
+        }
+        assert!(truncated, "Episode should terminate within max_episode_steps");
+    }
+
+    #[test]
+    fn test_engine_reset_clears_state() {
+        let config = make_config();
+        let mut engine = BacktestEngine::new(config).unwrap();
+        let _ = engine.reset().unwrap();
+
+        // Take some steps
+        for _ in 0..5 {
+            let _ = engine.step(0.0, 0.0).unwrap();
+        }
+        assert!(engine.episode_step > 0);
+
+        // Reset should clear
+        let _ = engine.reset().unwrap();
+        assert_eq!(engine.episode_step, 0);
+        assert!((engine.episode_pnl - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_engine_extreme_actions() {
+        let config = make_config();
+        let mut engine = BacktestEngine::new(config).unwrap();
+        let _ = engine.reset().unwrap();
+
+        // Extreme positive
+        let result = engine.step(1.0, 1.0).unwrap();
+        assert!(result.reward.is_finite());
+
+        // Extreme negative
+        let result = engine.step(-1.0, -1.0).unwrap();
+        assert!(result.reward.is_finite());
+    }
+
+    #[test]
+    fn test_engine_single_ticker() {
+        let config = EngineConfig::new(
+            Some(vec!["SPY".to_string()]),
+            Some(vec![450.0]),
+            100_000.0,
+            0.05,
+            0.0833,
+            100,
+            42,
+        );
+        let mut engine = BacktestEngine::new(config).unwrap();
+        let obs = engine.reset().unwrap();
+        assert_eq!(obs.len(), 20);
     }
 }

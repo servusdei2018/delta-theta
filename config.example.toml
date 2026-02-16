@@ -1,0 +1,58 @@
+# Delta-Theta Matrix Engine Configuration
+# Copy to config.toml and adjust values as needed.
+
+# Ticker symbols to simulate
+tickers = ["MU", "AMD"]
+
+# Initial underlying prices for each ticker
+initial_prices = [85.0, 120.0]
+
+# Initial buying power ($)
+initial_buying_power = 100_000.0
+
+# Risk-free interest rate (annualized, e.g. 0.05 = 5%)
+risk_free_rate = 0.05
+
+# Initial time to expiration in years (~30 days)
+initial_tte = 0.0833
+
+# Time decay per tick in years (~1 minute)
+time_decay_per_tick = 0.00001017
+
+# Maximum episode steps before forced termination
+max_episode_steps = 1000
+
+# Random seed (0 for random)
+seed = 42
+
+# Number of strikes to generate per underlying
+num_strikes = 11
+
+# Strike spacing in dollars
+strike_spacing = 2.5
+
+# Base implied volatility (annualized)
+base_iv = 0.30
+
+# Probability of a vol spike per tick
+vol_spike_prob = 0.02
+
+# Magnitude of vol spikes (multiplier)
+vol_spike_magnitude = 1.5
+
+# Early assignment ITM threshold (fraction of strike)
+early_assignment_threshold = 0.05
+
+# ── Risk Limits ──────────────────────────────────────────────────────────
+
+# Maximum number of open positions
+max_positions = 50
+
+# Maximum notional exposure ($)
+max_notional = 500_000.0
+
+# Maximum position size per trade (contracts)
+max_position_size = 100
+
+# Maximum margin utilization ratio (0.0 to 1.0)
+max_margin_utilization = 0.80
