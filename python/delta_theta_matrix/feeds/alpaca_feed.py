@@ -31,7 +31,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-import httpx
+import pyreqwest
 
 from delta_theta_matrix.live import MarketDataFeed
 
@@ -78,7 +78,7 @@ class AlpacaFeed(MarketDataFeed):
             _PAPER_TRADING_BASE if self._paper else _LIVE_TRADING_BASE
         )
         self._timeout = timeout
-        self._client: httpx.Client | None = None
+        self._client: pyreqwest.Client | None = None
         self._subscribed_symbols: list[str] = []
         self._tick_callbacks: list[Callable[[dict[str, Any]], None]] = []
 
@@ -86,7 +86,7 @@ class AlpacaFeed(MarketDataFeed):
 
     def connect(self) -> None:
         """Open an HTTP client session to Alpaca."""
-        self._client = httpx.Client(
+        self._client = pyreqwest.Client(
             headers={
                 "APCA-API-KEY-ID": self._api_key,
                 "APCA-API-SECRET-KEY": self._secret_key,

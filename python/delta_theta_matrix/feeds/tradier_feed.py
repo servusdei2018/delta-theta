@@ -31,7 +31,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-import httpx
+import pyreqwest
 
 from delta_theta_matrix.live import MarketDataFeed
 
@@ -70,7 +70,7 @@ class TradierFeed(MarketDataFeed):
 
         self._base_url = _SANDBOX_BASE if self._sandbox else _PRODUCTION_BASE
         self._timeout = timeout
-        self._client: httpx.Client | None = None
+        self._client: pyreqwest.Client | None = None
         self._subscribed_symbols: list[str] = []
         self._tick_callbacks: list[Callable[[dict[str, Any]], None]] = []
 
@@ -78,7 +78,7 @@ class TradierFeed(MarketDataFeed):
 
     def connect(self) -> None:
         """Open an HTTP client session to Tradier."""
-        self._client = httpx.Client(
+        self._client = pyreqwest.Client(
             base_url=self._base_url,
             headers={
                 "Authorization": f"Bearer {self._api_key}",
