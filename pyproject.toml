@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Q-Learned Delta-Theta Matrix Integration — RL-driven options trading harness"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.14"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "gymnasium>=1.1",
     "stable-baselines3[extra]>=2.6",

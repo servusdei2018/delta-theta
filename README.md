@@ -56,7 +56,7 @@ A high-performance algorithmic trading harness that dynamically resizes multi-le
 ### Prerequisites
 
 - Rust toolchain (1.70+)
-- Python 3.14+
+- Python 3.13+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip (fallback)
 
 ### Build
