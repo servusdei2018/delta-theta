@@ -6,36 +6,88 @@ A high-performance algorithmic trading harness that dynamically resizes multi-le
 
 ```mermaid
 flowchart TB
-    subgraph python ["Python Layer"]
-        env["env.py<br/>Gymnasium Env"]
-        train["train.py<br/>SB3 SAC/PPO"]
-        visualize["visualize.py<br/>3D Plotly Surfaces"]
-        live["live.py<br/>Pub/Sub Signals"]
+    subgraph data ["🔌 Market Data Feeds"]
+        direction LR
+        tradier["TradierFeed<br/><i>Options chains, quotes, history</i>"]
+        alpaca["AlpacaFeed<br/><i>Bars, snapshots, WebSocket</i>"]
     end
 
-    subgraph interop ["Zero-Copy NumPy Arrays · PyO3"]
-        boundary[" "]
+    subgraph python ["🐍 Python Layer"]
+        direction TB
+
+        subgraph training ["Training Pipeline"]
+            env["<b>env.py</b><br/>DeltaThetaEnv · Gymnasium<br/><i>20-dim obs / 2D continuous action</i>"]
+            train["<b>train.py</b><br/>SB3 SAC / PPO<br/><i>TensorBoard logging</i>"]
+        end
+
+        subgraph inference ["Live Inference"]
+            live["<b>live.py</b><br/>SignalBus pub/sub<br/><i>Real-time model inference</i>"]
+        end
+
+        subgraph viz ["Visualization"]
+            visualize["<b>visualize.py</b><br/>3D Plotly surfaces<br/><i>TTE × IV × Strike Width</i>"]
+        end
+
+        train -- "rollouts" --> env
+        env -- "eval data" --> visualize
     end
 
-    subgraph rust ["Rust Core"]
-        engine["engine.rs<br/>Backtest Engine"]
-        orderbook["orderbook.rs<br/>L2 Depth"]
-        options["options.rs<br/>Black-Scholes"]
-        risk["risk.rs<br/>Margin Tracking"]
-        state["state.rs<br/>NumPy Out"]
-        lib["lib.rs<br/>PyO3 Entry"]
+    subgraph bridge ["⚙️ PyO3 / Maturin Bridge — Zero-Copy NumPy Arrays"]
+        lib["<b>lib.rs</b><br/>PyO3 #[pymodule]<br/><i>Exposes BacktestEngine, EngineConfig,<br/>StepResult, RiskState, Greeks,<br/>PutCreditSpread, OptionLeg</i>"]
+        state["<b>state.rs</b><br/>get_state_vector()<br/><i>20-dim zero-copy NumPy emission</i>"]
     end
 
-    env --> boundary
-    train --> boundary
-    visualize --> boundary
-    live --> boundary
-    boundary --> engine
-    boundary --> orderbook
-    boundary --> options
-    boundary --> risk
-    boundary --> state
-    boundary --> lib
+    subgraph rust ["🦀 Rust Native Core  (nautilus-backtest)"]
+        direction TB
+
+        subgraph sim ["Order Book Simulation"]
+            engine["<b>engine.rs</b> · BacktestEngine<br/><i>Nanosecond-precision ticks<br/>Episodic reset · Vol spike simulation</i>"]
+            orderbook["<b>orderbook.rs</b><br/>L2 Order Book (10 levels)<br/><i>Mean-reverting random walks<br/>Multi-strike option chains</i>"]
+        end
+
+        subgraph pricing ["Options Pricing & Leg Sizing"]
+            options["<b>options.rs</b><br/>Black-Scholes put pricing<br/><i>Greeks (δ, γ, θ, ν)<br/>Newton-Raphson IV solver<br/>PutCreditSpread construction</i>"]
+        end
+
+        subgraph riskmod ["Risk & Margin"]
+            risk["<b>risk.rs</b> · RiskState<br/><i>Buying power tracking<br/>Margin utilization<br/>Early assignment detection<br/>Catastrophic margin calls</i>"]
+        end
+
+        engine -- "tick()" --> orderbook
+        engine -- "execute_spread_trade()" --> options
+        engine -- "open_position() / check_margin_call()" --> risk
+        options -- "spread pricing" --> risk
+        orderbook -- "IV surface & prices" --> options
+    end
+
+    %% Cross-layer data flow
+    tradier -- "quotes / chains" --> live
+    alpaca -- "quotes / chains" --> live
+    tradier -. "historical bars" .-> env
+    alpaca -. "historical bars" .-> env
+
+    train -- "step(action)" --> env
+    env -- "reset() / step()" --> lib
+    live -- "step()" --> lib
+    lib -- "delegates" --> engine
+    lib -- "get_state_vector()" --> state
+    state -- "np.ndarray (20-dim)" --> env
+
+    engine -- "observation vec" --> state
+
+    %% Reward flow annotation
+    env -- "reward = θ − margin³·λ + PnL·0.01" --> train
+
+    %% Styling
+    classDef rustNode fill:#f5d6a8,stroke:#c97a2e,color:#333
+    classDef pyNode fill:#a8d4f5,stroke:#2e7ec9,color:#333
+    classDef bridgeNode fill:#d4f5a8,stroke:#5ea82e,color:#333
+    classDef feedNode fill:#f5a8d4,stroke:#c92e7e,color:#333
+
+    class engine,orderbook,options,risk rustNode
+    class env,train,visualize,live pyNode
+    class lib,state bridgeNode
+    class tradier,alpaca feedNode
 ```
 
 ## Components
