@@ -299,7 +299,7 @@ dependencies = [
     { name = "torch" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "maturin" },
     { name = "pytest" },
@@ -310,16 +310,19 @@ dev = [
 requires-dist = [
     { name = "gymnasium", specifier = ">=0.29" },
     { name = "kaleido", specifier = ">=0.2" },
-    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "plotly", specifier = ">=5.18" },
     { name = "polars", specifier = ">=0.20" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "stable-baselines3", extras = ["extra"], specifier = ">=2.0" },
     { name = "torch", specifier = ">=2.0" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "maturin", specifier = ">=1.0" },
+    { name = "pytest", specifier = ">=7.0" },
+    { name = "ruff", specifier = ">=0.8" },
+]
 
 [[package]]
 name = "exceptiongroup"
