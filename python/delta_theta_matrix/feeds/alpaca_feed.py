@@ -257,9 +257,7 @@ class AlpacaFeed(MarketDataFeed):
             data = resp.json()
         except Exception as exc:
             logger.error("Failed to fetch quotes for %s: %s", syms, exc)
-            raise AlpacaFeedError(
-                f"Failed to fetch quotes for {syms}: {exc}"
-            ) from exc
+            raise AlpacaFeedError(f"Failed to fetch quotes for {syms}: {exc}") from exc
 
         quotes_map = data.get("quotes", {})
         normalized: list[dict[str, Any]] = []
