@@ -6,7 +6,6 @@
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use rand_distr::{Distribution, Normal};
 use serde::{Deserialize, Serialize};
 
 use crate::options::PutCreditSpread;
@@ -157,7 +156,7 @@ impl BacktestEngine {
     #[new]
     pub fn new(config: EngineConfig) -> Result<Self, PyErr> {
         let rng = if config.seed == 0 {
-            StdRng::from_entropy()
+            StdRng::from_rng(&mut rand::rng())
         } else {
             StdRng::seed_from_u64(config.seed)
         };
@@ -402,7 +401,7 @@ impl BacktestEngine {
 
     /// Simulate a potential volatility spike.
     fn simulate_vol_spike(&mut self) {
-        let roll: f64 = rand::Rng::gen(&mut self.rng);
+        let roll: f64 = rand::Rng::random(&mut self.rng);
         if roll < self.config.vol_spike_prob {
             self.current_iv *= self.config.vol_spike_magnitude;
             // Also spike the order book IVs

@@ -183,7 +183,7 @@ impl RiskState {
         let mut total_pnl = 0.0;
 
         for position in &self.positions {
-            let sigma = position.spread.short_leg.greeks.delta.abs().max(0.1); // Use delta as proxy
+            let _sigma = position.spread.short_leg.greeks.delta.abs().max(0.1); // Use delta as proxy
             // Use the stored implied vol from the order book
             let pnl = position.spread.current_pnl(
                 underlying_price,
