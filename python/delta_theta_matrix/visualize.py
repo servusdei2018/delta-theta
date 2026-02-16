@@ -107,7 +107,11 @@ def create_3d_surface(
         for i in range(z_grid.shape[0]):
             for j in range(z_grid.shape[1]):
                 if np.isnan(z_filled[i, j]):
-                    z_filled[i, j] = col_means[j] if not np.isnan(col_means[j]) else np.nanmean(z_grid)
+                    z_filled[i, j] = (
+                        col_means[j]
+                        if not np.isnan(col_means[j])
+                        else np.nanmean(z_grid)
+                    )
         z_grid = z_filled
 
     # Create bin centers for axis labels

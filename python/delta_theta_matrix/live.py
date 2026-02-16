@@ -177,7 +177,9 @@ class WebSocketFeed(MarketDataFeed):
         api_key: Optional API key for authentication.
     """
 
-    def __init__(self, url: str = "wss://example.com/market", api_key: str | None = None) -> None:
+    def __init__(
+        self, url: str = "wss://example.com/market", api_key: str | None = None
+    ) -> None:
         self.url = url
         self.api_key = api_key
         self._connected = False
@@ -295,7 +297,9 @@ def run_live(
         engine.run_ticks(1)
 
         # Get observation
-        obs = np.array(engine.reset() if tick_count == 1 else engine.step(0.0, 0.0).observation)
+        obs = np.array(
+            engine.reset() if tick_count == 1 else engine.step(0.0, 0.0).observation
+        )
 
         # Run inference
         action, _ = model.predict(obs, deterministic=True)
@@ -307,7 +311,9 @@ def run_live(
         target_delta = -0.05 - (delta_position_norm + 1.0) / 2.0 * 0.45
 
         # Compute confidence based on action magnitude and margin state
-        action_magnitude = np.sqrt(strike_width_norm**2 + delta_position_norm**2) / np.sqrt(2)
+        action_magnitude = np.sqrt(
+            strike_width_norm**2 + delta_position_norm**2
+        ) / np.sqrt(2)
         confidence = float(np.clip(action_magnitude, 0.0, 1.0))
 
         if confidence >= confidence_threshold:
