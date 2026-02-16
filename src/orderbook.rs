@@ -54,19 +54,19 @@ impl OptionOrderBook {
         let best_bid = theo_price - half_spread;
         let best_ask = theo_price + half_spread;
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let bids: Vec<PriceLevel> = (0..NUM_LEVELS)
             .map(|i| PriceLevel {
                 price: (best_bid - i as f64 * tick_size).max(0.01),
-                quantity: rng.gen_range(10..200),
+                quantity: rng.random_range(10..200),
             })
             .collect();
 
         let asks: Vec<PriceLevel> = (0..NUM_LEVELS)
             .map(|i| PriceLevel {
                 price: best_ask + i as f64 * tick_size,
-                quantity: rng.gen_range(10..200),
+                quantity: rng.random_range(10..200),
             })
             .collect();
 
@@ -123,14 +123,14 @@ impl OptionOrderBook {
         for level in &mut self.bids {
             level.price = (level.price + price_change).max(0.01);
             // Randomly adjust quantities
-            let qty_change: i32 = rng.gen_range(-20..20);
+            let qty_change: i32 = rng.random_range(-20..20);
             level.quantity = (level.quantity as i32 + qty_change).clamp(1, 500) as u32;
         }
 
         // Update all ask levels
         for level in &mut self.asks {
             level.price = (level.price + price_change).max(0.01);
-            let qty_change: i32 = rng.gen_range(-20..20);
+            let qty_change: i32 = rng.random_range(-20..20);
             level.quantity = (level.quantity as i32 + qty_change).clamp(1, 500) as u32;
         }
 
