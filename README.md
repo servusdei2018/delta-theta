@@ -4,29 +4,38 @@ A high-performance algorithmic trading harness that dynamically resizes multi-le
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Python Layer                          │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌────────┐│
-│  │  env.py   │  │ train.py │  │visualize.py│  │live.py ││
-│  │Gymnasium  │  │ SB3 SAC/ │  │  3D Plotly │  │Pub/Sub ││
-│  │  Env      │  │   PPO    │  │  Surfaces  │  │Signals ││
-│  └─────┬─────┘  └────┬─────┘  └───────────┘  └────────┘│
-│        │              │                                   │
-│  ══════╪══════════════╪═══════════════════════════════════│
-│        │   Zero-Copy  │   NumPy Arrays (PyO3)            │
-│  ══════╪══════════════╪═══════════════════════════════════│
-│                    Rust Core                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐│
-│  │engine.rs │  │orderbook │  │options.rs │  │ risk.rs  ││
-│  │Backtest  │  │  .rs     │  │Black-     │  │ Margin   ││
-│  │Engine    │  │L2 Depth  │  │Scholes    │  │ Tracking ││
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘│
-│  ┌──────────┐  ┌──────────┐                              │
-│  │ state.rs │  │ lib.rs   │                              │
-│  │NumPy Out │  │PyO3 Entry│                              │
-│  └──────────┘  └──────────┘                              │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph python ["Python Layer"]
+        env["env.py<br/>Gymnasium Env"]
+        train["train.py<br/>SB3 SAC/PPO"]
+        visualize["visualize.py<br/>3D Plotly Surfaces"]
+        live["live.py<br/>Pub/Sub Signals"]
+    end
+
+    subgraph interop ["Zero-Copy NumPy Arrays · PyO3"]
+        boundary[" "]
+    end
+
+    subgraph rust ["Rust Core"]
+        engine["engine.rs<br/>Backtest Engine"]
+        orderbook["orderbook.rs<br/>L2 Depth"]
+        options["options.rs<br/>Black-Scholes"]
+        risk["risk.rs<br/>Margin Tracking"]
+        state["state.rs<br/>NumPy Out"]
+        lib["lib.rs<br/>PyO3 Entry"]
+    end
+
+    env --> boundary
+    train --> boundary
+    visualize --> boundary
+    live --> boundary
+    boundary --> engine
+    boundary --> orderbook
+    boundary --> options
+    boundary --> risk
+    boundary --> state
+    boundary --> lib
 ```
 
 ## Components
