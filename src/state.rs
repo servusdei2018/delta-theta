@@ -3,7 +3,7 @@
 //! Provides efficient state vector extraction from the BacktestEngine,
 //! using the numpy crate for zero-copy transfer to Python.
 
-use numpy::{PyArray1, PyArrayMethods};
+use numpy::PyArray1;
 use pyo3::prelude::*;
 
 use crate::engine::BacktestEngine;
