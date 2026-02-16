@@ -203,9 +203,7 @@ class TradierFeed(MarketDataFeed):
             resp.raise_for_status()
             data = resp.json()
         except Exception as exc:
-            logger.error(
-                "Failed to fetch expirations for %s: %s", symbol, exc
-            )
+            logger.error("Failed to fetch expirations for %s: %s", symbol, exc)
             raise TradierFeedError(
                 f"Failed to fetch expirations for {symbol}: {exc}"
             ) from exc
@@ -247,9 +245,7 @@ class TradierFeed(MarketDataFeed):
             data = resp.json()
         except Exception as exc:
             logger.error("Failed to fetch quotes for %s: %s", syms, exc)
-            raise TradierFeedError(
-                f"Failed to fetch quotes for {syms}: {exc}"
-            ) from exc
+            raise TradierFeedError(f"Failed to fetch quotes for {syms}: {exc}") from exc
 
         quotes_wrapper = data.get("quotes", {})
         raw = quotes_wrapper.get("quote", [])

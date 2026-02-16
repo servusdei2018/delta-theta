@@ -295,7 +295,9 @@ class WebSocketFeed(MarketDataFeed):
                 self.connect()
                 if self._subscribed_symbols:
                     self.subscribe(self._subscribed_symbols)
-                logger.info("Reconnected successfully after %d attempts", self._reconnect_count)
+                logger.info(
+                    "Reconnected successfully after %d attempts", self._reconnect_count
+                )
                 return True
             except Exception:
                 logger.exception("Reconnect attempt %d failed", self._reconnect_count)
@@ -325,7 +327,9 @@ class WebSocketFeed(MarketDataFeed):
 
         for i in range(n_ticks):
             if self._shutdown_event.is_set():
-                logger.info("Shutdown requested, stopping tick simulation at tick %d", i)
+                logger.info(
+                    "Shutdown requested, stopping tick simulation at tick %d", i
+                )
                 break
 
             for symbol in self._subscribed_symbols:

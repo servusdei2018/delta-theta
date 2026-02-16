@@ -33,8 +33,12 @@ class TestSignal:
 
     def test_signal_with_legs(self) -> None:
         legs = [
-            OptionLegSpec(strike=95.0, expiry="2026-03-20", option_type="put", side="sell"),
-            OptionLegSpec(strike=90.0, expiry="2026-03-20", option_type="put", side="buy"),
+            OptionLegSpec(
+                strike=95.0, expiry="2026-03-20", option_type="put", side="sell"
+            ),
+            OptionLegSpec(
+                strike=90.0, expiry="2026-03-20", option_type="put", side="buy"
+            ),
         ]
         sig = Signal(ticker="MU", action_type="sell", legs=legs, confidence=0.85)
         assert len(sig.legs) == 2
