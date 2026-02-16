@@ -325,6 +325,8 @@ impl PutCreditSpread {
 mod tests {
     use super::*;
 
+    // ── Black-Scholes pricing tests ─────────────────────────────────────
+
     #[test]
     fn test_black_scholes_put_atm() {
         let price = black_scholes_put(100.0, 100.0, 0.05, 0.2, 1.0).unwrap();
@@ -333,21 +335,107 @@ mod tests {
     }
 
     #[test]
+    fn test_black_scholes_put_deep_otm() {
+        let price = black_scholes_put(100.0, 50.0, 0.05, 0.2, 0.1).unwrap();
+        // Deep OTM put should be nearly worthless
+        assert!(price < 0.01, "Deep OTM put should be near zero: {}", price);
+    }
+
+    #[test]
+    fn test_black_scholes_put_deep_itm() {
+        let price = black_scholes_put(50.0, 100.0, 0.05, 0.2, 0.1).unwrap();
+        // Deep ITM put should be close to intrinsic value
+        assert!(price > 45.0, "Deep ITM put should be near intrinsic: {}", price);
+    }
+
+    #[test]
+    fn test_black_scholes_put_at_expiry() {
+        // At expiry, should return intrinsic value
+        let itm = black_scholes_put(90.0, 100.0, 0.05, 0.2, 0.0).unwrap();
+        assert!((itm - 10.0).abs() < 0.01, "ITM at expiry: {}", itm);
+
+        let otm = black_scholes_put(110.0, 100.0, 0.05, 0.2, 0.0).unwrap();
+        assert!((otm - 0.0).abs() < 0.01, "OTM at expiry: {}", otm);
+    }
+
+    #[test]
+    fn test_black_scholes_put_invalid_inputs() {
+        assert!(black_scholes_put(0.0, 100.0, 0.05, 0.2, 1.0).is_err());
+        assert!(black_scholes_put(-1.0, 100.0, 0.05, 0.2, 1.0).is_err());
+        assert!(black_scholes_put(100.0, 0.0, 0.05, 0.2, 1.0).is_err());
+        assert!(black_scholes_put(100.0, -1.0, 0.05, 0.2, 1.0).is_err());
+        assert!(black_scholes_put(100.0, 100.0, 0.05, 0.0, 1.0).is_err());
+        assert!(black_scholes_put(100.0, 100.0, 0.05, -0.1, 1.0).is_err());
+    }
+
+    #[test]
+    fn test_black_scholes_put_higher_vol_higher_price() {
+        let low_vol = black_scholes_put(100.0, 100.0, 0.05, 0.1, 1.0).unwrap();
+        let high_vol = black_scholes_put(100.0, 100.0, 0.05, 0.5, 1.0).unwrap();
+        assert!(high_vol > low_vol, "Higher vol should mean higher put price");
+    }
+
+    #[test]
+    fn test_black_scholes_put_longer_time_higher_price() {
+        let short = black_scholes_put(100.0, 100.0, 0.05, 0.2, 0.1).unwrap();
+        let long = black_scholes_put(100.0, 100.0, 0.05, 0.2, 1.0).unwrap();
+        assert!(long > short, "Longer time should mean higher put price");
+    }
+
+    // ── Greeks tests ────────────────────────────────────────────────────
+
+    #[test]
     fn test_put_greeks_delta_range() {
         let greeks = put_greeks(100.0, 100.0, 0.05, 0.2, 1.0).unwrap();
-        // Put delta should be between -1 and 0
         assert!(greeks.delta > -1.0 && greeks.delta < 0.0);
-        // Gamma should be positive
         assert!(greeks.gamma > 0.0);
     }
 
     #[test]
-    fn test_put_credit_spread() {
-        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.2, 0.1).unwrap();
-        assert!(spread.net_credit > 0.0, "Credit spread should receive net credit");
-        assert!(spread.spread_width == 5.0);
-        assert!(spread.max_loss > 0.0);
+    fn test_put_greeks_deep_itm_delta() {
+        let greeks = put_greeks(50.0, 100.0, 0.05, 0.2, 0.1).unwrap();
+        // Deep ITM put delta should be close to -1
+        assert!(greeks.delta < -0.9, "Deep ITM delta: {}", greeks.delta);
     }
+
+    #[test]
+    fn test_put_greeks_deep_otm_delta() {
+        let greeks = put_greeks(200.0, 100.0, 0.05, 0.2, 0.1).unwrap();
+        // Deep OTM put delta should be close to 0
+        assert!(greeks.delta > -0.1, "Deep OTM delta: {}", greeks.delta);
+    }
+
+    #[test]
+    fn test_put_greeks_at_expiry() {
+        let itm = put_greeks(90.0, 100.0, 0.05, 0.2, 0.0).unwrap();
+        assert!((itm.delta - (-1.0)).abs() < 0.01);
+        assert!((itm.gamma - 0.0).abs() < 0.01);
+
+        let otm = put_greeks(110.0, 100.0, 0.05, 0.2, 0.0).unwrap();
+        assert!((otm.delta - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_put_greeks_invalid_inputs() {
+        assert!(put_greeks(0.0, 100.0, 0.05, 0.2, 1.0).is_err());
+        assert!(put_greeks(100.0, 0.0, 0.05, 0.2, 1.0).is_err());
+        assert!(put_greeks(100.0, 100.0, 0.05, 0.0, 1.0).is_err());
+    }
+
+    #[test]
+    fn test_put_greeks_vega_positive() {
+        let greeks = put_greeks(100.0, 100.0, 0.05, 0.2, 1.0).unwrap();
+        assert!(greeks.vega > 0.0, "Vega should be positive: {}", greeks.vega);
+    }
+
+    #[test]
+    fn test_put_greeks_theta_negative_for_otm() {
+        let greeks = put_greeks(100.0, 95.0, 0.05, 0.2, 0.1).unwrap();
+        // OTM put theta should be negative (time decay hurts long puts)
+        assert!(greeks.theta < 0.0, "OTM put theta should be negative: {}", greeks.theta);
+    }
+
+    // ── Implied volatility tests ────────────────────────────────────────
 
     #[test]
     fn test_implied_volatility_roundtrip() {
@@ -355,5 +443,113 @@ mod tests {
         let price = black_scholes_put(100.0, 100.0, 0.05, true_vol, 0.5).unwrap();
         let iv = implied_volatility(price, 100.0, 100.0, 0.05, 0.5, 100).unwrap();
         assert!((iv - true_vol).abs() < 0.001, "IV roundtrip failed: {}", iv);
+    }
+
+    #[test]
+    fn test_implied_volatility_various_vols() {
+        for &true_vol in &[0.10, 0.20, 0.30, 0.50, 1.0] {
+            let price = black_scholes_put(100.0, 100.0, 0.05, true_vol, 0.5).unwrap();
+            let iv = implied_volatility(price, 100.0, 100.0, 0.05, 0.5, 200).unwrap();
+            assert!(
+                (iv - true_vol).abs() < 0.01,
+                "IV roundtrip failed for vol={}: got {}",
+                true_vol,
+                iv
+            );
+        }
+    }
+
+    #[test]
+    fn test_implied_volatility_invalid_inputs() {
+        assert!(implied_volatility(0.0, 100.0, 100.0, 0.05, 0.5, 100).is_err());
+        assert!(implied_volatility(-1.0, 100.0, 100.0, 0.05, 0.5, 100).is_err());
+        assert!(implied_volatility(5.0, 100.0, 100.0, 0.05, 0.0, 100).is_err());
+    }
+
+    // ── Put credit spread tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_put_credit_spread() {
+        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.2, 0.1).unwrap();
+        assert!(spread.net_credit > 0.0, "Credit spread should receive net credit");
+        assert!((spread.spread_width - 5.0).abs() < 1e-10);
+        assert!(spread.max_loss > 0.0);
+    }
+
+    #[test]
+    fn test_put_credit_spread_invalid_strikes() {
+        // Short strike must be higher than long strike
+        let result = PutCreditSpread::new(100.0, 90.0, 95.0, 0.05, 0.2, 0.1);
+        assert!(result.is_err());
+
+        // Equal strikes
+        let result = PutCreditSpread::new(100.0, 95.0, 95.0, 0.05, 0.2, 0.1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_put_credit_spread_max_profit_equals_credit() {
+        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.2, 0.1).unwrap();
+        assert!(
+            (spread.max_profit - spread.net_credit * 100.0).abs() < 0.01,
+            "Max profit should equal net credit * 100"
+        );
+    }
+
+    #[test]
+    fn test_put_credit_spread_pnl_at_entry() {
+        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.25, 0.1).unwrap();
+        // P&L at entry conditions should be approximately zero
+        let pnl = spread.current_pnl(100.0, 0.05, 0.25, 0.1).unwrap();
+        assert!(pnl.abs() < 1.0, "P&L at entry should be near zero: {}", pnl);
+    }
+
+    #[test]
+    fn test_put_credit_spread_pnl_favorable() {
+        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.25, 0.1).unwrap();
+        // Price moves up → favorable for put credit spread
+        let pnl = spread.current_pnl(110.0, 0.05, 0.25, 0.05).unwrap();
+        assert!(pnl > 0.0, "P&L should be positive when price rises: {}", pnl);
+    }
+
+    #[test]
+    fn test_put_credit_spread_net_delta() {
+        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.25, 0.1).unwrap();
+        let delta = spread.net_delta();
+        // Net delta of a put credit spread should be positive (bullish)
+        assert!(delta.is_finite(), "Net delta should be finite: {}", delta);
+    }
+
+    #[test]
+    fn test_put_credit_spread_net_theta() {
+        let spread = PutCreditSpread::new(100.0, 95.0, 90.0, 0.05, 0.25, 0.1).unwrap();
+        let theta = spread.net_theta();
+        assert!(theta.is_finite(), "Net theta should be finite: {}", theta);
+    }
+
+    // ── Edge case tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_very_high_volatility() {
+        let price = black_scholes_put(100.0, 100.0, 0.05, 5.0, 1.0).unwrap();
+        assert!(price.is_finite() && price > 0.0);
+    }
+
+    #[test]
+    fn test_very_short_time() {
+        let price = black_scholes_put(100.0, 100.0, 0.05, 0.2, 0.001).unwrap();
+        assert!(price.is_finite() && price >= 0.0);
+    }
+
+    #[test]
+    fn test_norm_cdf_symmetry() {
+        assert!((norm_cdf(0.0) - 0.5).abs() < 1e-6);
+        assert!((norm_cdf(1.0) + norm_cdf(-1.0) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_norm_pdf_symmetry() {
+        assert!((norm_pdf(1.0) - norm_pdf(-1.0)).abs() < 1e-10);
+        assert!(norm_pdf(0.0) > norm_pdf(1.0));
     }
 }

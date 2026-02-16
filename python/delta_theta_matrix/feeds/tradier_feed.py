@@ -41,8 +41,16 @@ _SANDBOX_BASE = "https://sandbox.tradier.com/v1"
 _PRODUCTION_BASE = "https://api.tradier.com/v1"
 
 
+class TradierFeedError(Exception):
+    """Error raised by TradierFeed operations."""
+
+    pass
+
+
 class TradierFeed(MarketDataFeed):
     """Market data feed backed by the Tradier REST API.
+
+    All HTTP calls include proper error handling — no bare unwrap/raise_for_status.
 
     Args:
         api_key: Tradier API token. Falls back to ``TRADIER_API_KEY`` env var.
@@ -92,8 +100,12 @@ class TradierFeed(MarketDataFeed):
     def disconnect(self) -> None:
         """Close the HTTP client session."""
         if self._client is not None:
-            self._client.close()
-            self._client = None
+            try:
+                self._client.close()
+            except Exception:
+                logger.exception("Error closing Tradier client")
+            finally:
+                self._client = None
         logger.info("TradierFeed disconnected")
 
     def subscribe(self, symbols: list[str]) -> None:
@@ -133,6 +145,9 @@ class TradierFeed(MarketDataFeed):
             List of option contract dicts, each containing strike, bid, ask,
             last, volume, open_interest, option_type, and (if *greeks*) a
             nested ``greeks`` dict with delta, gamma, theta, vega, mid_iv.
+
+        Raises:
+            TradierFeedError: If the HTTP request fails.
         """
         self._ensure_connected()
         assert self._client is not None
@@ -142,9 +157,21 @@ class TradierFeed(MarketDataFeed):
             "expiration": expiration,
             "greeks": str(greeks).lower(),
         }
-        resp = self._client.get("/markets/options/chains", params=params)
-        resp.raise_for_status()
-        data = resp.json()
+
+        try:
+            resp = self._client.get("/markets/options/chains", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error(
+                "Failed to fetch options chain for %s exp=%s: %s",
+                symbol,
+                expiration,
+                exc,
+            )
+            raise TradierFeedError(
+                f"Failed to fetch options chain for {symbol} exp={expiration}: {exc}"
+            ) from exc
 
         options = data.get("options", {})
         if options is None:
@@ -162,15 +189,27 @@ class TradierFeed(MarketDataFeed):
 
         Returns:
             Sorted list of expiration date strings (``YYYY-MM-DD``).
+
+        Raises:
+            TradierFeedError: If the HTTP request fails.
         """
         self._ensure_connected()
         assert self._client is not None
 
-        resp = self._client.get(
-            "/markets/options/expirations", params={"symbol": symbol}
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = self._client.get(
+                "/markets/options/expirations", params={"symbol": symbol}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error(
+                "Failed to fetch expirations for %s: %s", symbol, exc
+            )
+            raise TradierFeedError(
+                f"Failed to fetch expirations for {symbol}: {exc}"
+            ) from exc
+
         expirations = data.get("expirations", {})
         if expirations is None:
             return []
@@ -188,6 +227,10 @@ class TradierFeed(MarketDataFeed):
         Returns:
             List of quote dicts with keys: symbol, last, bid, ask, volume,
             change, change_pct, timestamp.
+
+        Raises:
+            TradierFeedError: If the HTTP request fails.
+            ValueError: If no symbols are specified.
         """
         self._ensure_connected()
         assert self._client is not None
@@ -196,9 +239,17 @@ class TradierFeed(MarketDataFeed):
         if not syms:
             raise ValueError("No symbols specified and none subscribed.")
 
-        resp = self._client.get("/markets/quotes", params={"symbols": ",".join(syms)})
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = self._client.get(
+                "/markets/quotes", params={"symbols": ",".join(syms)}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error("Failed to fetch quotes for %s: %s", syms, exc)
+            raise TradierFeedError(
+                f"Failed to fetch quotes for {syms}: {exc}"
+            ) from exc
 
         quotes_wrapper = data.get("quotes", {})
         raw = quotes_wrapper.get("quote", [])
@@ -233,8 +284,8 @@ class TradierFeed(MarketDataFeed):
             for cb in self._tick_callbacks:
                 try:
                     cb(tick)
-                except Exception as exc:
-                    logger.error("Tick callback error: %s", exc)
+                except Exception:
+                    logger.exception("Tick callback error")
 
         return normalized
 
@@ -255,6 +306,9 @@ class TradierFeed(MarketDataFeed):
 
         Returns:
             List of bar dicts with keys: date, open, high, low, close, volume.
+
+        Raises:
+            TradierFeedError: If the HTTP request fails.
         """
         self._ensure_connected()
         assert self._client is not None
@@ -265,9 +319,15 @@ class TradierFeed(MarketDataFeed):
         if end:
             params["end"] = end
 
-        resp = self._client.get("/markets/history", params=params)
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = self._client.get("/markets/history", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error("Failed to fetch history for %s: %s", symbol, exc)
+            raise TradierFeedError(
+                f"Failed to fetch history for {symbol}: {exc}"
+            ) from exc
 
         history = data.get("history", {})
         if history is None:
@@ -290,6 +350,11 @@ class TradierFeed(MarketDataFeed):
     # ── Helpers ──────────────────────────────────────────────────────────
 
     def _ensure_connected(self) -> None:
+        """Ensure the client is connected.
+
+        Raises:
+            RuntimeError: If not connected.
+        """
         if self._client is None:
             raise RuntimeError("Not connected. Call connect() first.")
 

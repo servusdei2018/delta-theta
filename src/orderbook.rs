@@ -245,6 +245,21 @@ mod tests {
     }
 
     #[test]
+    fn test_option_order_book_mid_price() {
+        let book = OptionOrderBook::new(100.0, 2.50, 0.25, 0.05);
+        let mid = book.mid_price();
+        assert!(mid > book.best_bid());
+        assert!(mid < book.best_ask());
+    }
+
+    #[test]
+    fn test_option_order_book_spread() {
+        let book = OptionOrderBook::new(100.0, 2.50, 0.25, 0.05);
+        let spread = book.spread();
+        assert!(spread > 0.0, "Spread should be positive: {}", spread);
+    }
+
+    #[test]
     fn test_tick_update_maintains_ordering() {
         let mut book = OptionOrderBook::new(100.0, 2.50, 0.25, 0.05);
         let mut rng = rand::thread_rng();
@@ -255,11 +270,83 @@ mod tests {
     }
 
     #[test]
+    fn test_tick_update_iv_stays_bounded() {
+        let mut book = OptionOrderBook::new(100.0, 2.50, 0.25, 0.05);
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            book.tick_update(&mut rng, 0.1, 0.005);
+            assert!(book.implied_vol >= 0.05, "IV too low: {}", book.implied_vol);
+            assert!(book.implied_vol <= 3.0, "IV too high: {}", book.implied_vol);
+        }
+    }
+
+    #[test]
+    fn test_tick_update_prices_stay_positive() {
+        let mut book = OptionOrderBook::new(100.0, 2.50, 0.25, 0.05);
+        let mut rng = rand::thread_rng();
+        for _ in 0..100 {
+            book.tick_update(&mut rng, 0.1, 0.005);
+            for level in &book.bids {
+                assert!(level.price > 0.0, "Bid price non-positive: {}", level.price);
+                assert!(level.quantity > 0, "Bid qty non-positive: {}", level.quantity);
+            }
+            for level in &book.asks {
+                assert!(level.price > 0.0, "Ask price non-positive: {}", level.price);
+                assert!(level.quantity > 0, "Ask qty non-positive: {}", level.quantity);
+            }
+        }
+    }
+
+    #[test]
     fn test_underlying_order_book() {
         let strikes = vec![90.0, 95.0, 100.0, 105.0, 110.0];
         let ivs = vec![0.30, 0.27, 0.25, 0.27, 0.30];
         let book = UnderlyingOrderBook::new("TEST", 100.0, &strikes, &ivs, 0.05, 0.1).unwrap();
         assert_eq!(book.option_books.len(), 5);
         assert!(book.book_for_strike(100.0).is_some());
+    }
+
+    #[test]
+    fn test_underlying_order_book_mismatched_lengths() {
+        let strikes = vec![90.0, 95.0, 100.0];
+        let ivs = vec![0.30, 0.27]; // Mismatched
+        let result = UnderlyingOrderBook::new("TEST", 100.0, &strikes, &ivs, 0.05, 0.1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_underlying_order_book_tick() {
+        let strikes = vec![90.0, 95.0, 100.0, 105.0, 110.0];
+        let ivs = vec![0.30, 0.27, 0.25, 0.27, 0.30];
+        let mut book = UnderlyingOrderBook::new("TEST", 100.0, &strikes, &ivs, 0.05, 0.1).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..100 {
+            book.tick(&mut rng);
+            assert!(book.underlying_price > 0.0, "Underlying price non-positive");
+        }
+    }
+
+    #[test]
+    fn test_book_for_strike_not_found() {
+        let strikes = vec![90.0, 95.0, 100.0];
+        let ivs = vec![0.30, 0.27, 0.25];
+        let book = UnderlyingOrderBook::new("TEST", 100.0, &strikes, &ivs, 0.05, 0.1).unwrap();
+        assert!(book.book_for_strike(999.0).is_none());
+    }
+
+    #[test]
+    fn test_underlying_order_book_empty_strikes() {
+        let strikes: Vec<f64> = vec![];
+        let ivs: Vec<f64> = vec![];
+        let book = UnderlyingOrderBook::new("TEST", 100.0, &strikes, &ivs, 0.05, 0.1).unwrap();
+        assert_eq!(book.option_books.len(), 0);
+    }
+
+    #[test]
+    fn test_option_order_book_very_small_price() {
+        let book = OptionOrderBook::new(100.0, 0.01, 0.25, 0.05);
+        assert!(book.best_bid() > 0.0);
+        assert!(book.best_ask() > 0.0);
     }
 }
