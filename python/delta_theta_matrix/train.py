@@ -48,17 +48,13 @@ class ThetaMetricsCallback(BaseCallback):
         for info in infos:
             if isinstance(info, dict):
                 if "episode_pnl" in info:
-                    self.logger.record(
-                        "theta/episode_pnl", info["episode_pnl"]
-                    )
+                    self.logger.record("theta/episode_pnl", info["episode_pnl"])
                 if "margin_utilization" in info:
                     self.logger.record(
                         "theta/margin_utilization", info["margin_utilization"]
                     )
                 if "theta_exposure" in info:
-                    self.logger.record(
-                        "theta/theta_exposure", info["theta_exposure"]
-                    )
+                    self.logger.record("theta/theta_exposure", info["theta_exposure"])
                 if "iv" in info:
                     self.logger.record("theta/implied_vol", info["iv"])
 
@@ -336,9 +332,7 @@ def main() -> None:
     train_parser.add_argument(
         "--learning-rate", type=float, default=3e-4, help="Learning rate"
     )
-    train_parser.add_argument(
-        "--batch-size", type=int, default=256, help="Batch size"
-    )
+    train_parser.add_argument("--batch-size", type=int, default=256, help="Batch size")
     train_parser.add_argument(
         "--gamma", type=float, default=0.99, help="Discount factor"
     )
@@ -361,15 +355,11 @@ def main() -> None:
     train_parser.add_argument(
         "--eval-freq", type=int, default=5000, help="Evaluation frequency"
     )
-    train_parser.add_argument(
-        "--verbose", type=int, default=1, help="Verbosity level"
-    )
+    train_parser.add_argument("--verbose", type=int, default=1, help="Verbosity level")
 
     # Evaluate subcommand
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate a trained agent")
-    eval_parser.add_argument(
-        "model_path", type=str, help="Path to the saved model"
-    )
+    eval_parser.add_argument("model_path", type=str, help="Path to the saved model")
     eval_parser.add_argument(
         "--algo",
         type=str,
