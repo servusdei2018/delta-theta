@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.8,<2.0"]
 build-backend = "maturin"
 
 [project]
@@ -8,19 +8,19 @@ version = "0.1.0"
 description = "Q-Learned Delta-Theta Matrix Integration — RL-driven options trading harness"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
-    "gymnasium>=0.29",
-    "stable-baselines3[extra]>=2.0",
-    "numpy>=1.24",
-    "polars>=0.20",
-    "plotly>=5.18",
-    "torch>=2.0",
-    "kaleido>=0.2",
+    "gymnasium>=1.1",
+    "stable-baselines3[extra]>=2.6",
+    "numpy>=2.2",
+    "polars>=1.24",
+    "plotly>=6.0",
+    "torch>=2.6",
+    "kaleido>=0.4",
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.8"]
+dev = ["ruff>=0.11"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
