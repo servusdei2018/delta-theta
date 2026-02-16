@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "delta-theta-matrix"
+version = "0.1.0"
+description = "Q-Learned Delta-Theta Matrix Integration — RL-driven options trading harness"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "gymnasium>=0.29",
+    "stable-baselines3[extra]>=2.0",
+    "numpy>=1.24",
+    "polars>=0.20",
+    "plotly>=5.18",
+    "torch>=2.0",
+    "kaleido>=0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "maturin>=1.0",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "delta_theta_matrix._native"
