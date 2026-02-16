@@ -50,6 +50,7 @@ A high-performance algorithmic trading harness that dynamically resizes multi-le
 | `train.py` | CLI training script — SAC/PPO via Stable Baselines3 with TensorBoard logging |
 | `visualize.py` | 3D Plotly surfaces (TTE × IV × Strike Width) and reward curves |
 | `live.py` | Market data feed abstraction, `SignalBus` pub/sub, real-time inference loop |
+| `feeds/` | Concrete feed implementations: `TradierFeed`, `AlpacaFeed` |
 
 ## Quick Start
 
@@ -121,6 +122,87 @@ python -m delta_theta_matrix.visualize --data output/eval_data.json --output out
 from delta_theta_matrix.live import run_live, WebSocketFeed, SignalBus
 
 feed = WebSocketFeed(url="wss://your-data-provider.com/market")
+bus = SignalBus()
+bus.register_callback(lambda signal: print(signal.to_json()))
+
+run_live(
+    model_path="output/sac_model/final_model",
+    feed=feed,
+    symbols=["MU", "AMD"],
+    signal_bus=bus,
+)
+```
+
+## Live Data Feeds
+
+The project ships with two production-ready market data feed integrations that
+implement the [`MarketDataFeed`](python/delta_theta_matrix/live.py:133) ABC and can be
+plugged directly into [`run_live()`](python/delta_theta_matrix/live.py:250).
+
+### TradierFeed
+
+```python
+from delta_theta_matrix.feeds import TradierFeed
+
+# Reads TRADIER_API_KEY and TRADIER_SANDBOX env vars by default
+feed = TradierFeed()
+feed.connect()
+feed.subscribe(["MU", "AMD"])
+
+# Options chain with Greeks & IV
+chain = feed.get_options_chain("MU", "2026-03-20")
+
+# Real-time / delayed quotes
+quotes = feed.get_quotes(["MU", "AMD"])
+
+# Historical daily bars
+history = feed.get_history("MU", interval="daily", start="2026-01-01", end="2026-02-01")
+
+feed.disconnect()
+```
+
+| Env Variable | Description | Default |
+|---|---|---|
+| `TRADIER_API_KEY` | Tradier API bearer token | *(required)* |
+| `TRADIER_SANDBOX` | `"true"` for sandbox, `"false"` for production | `"true"` |
+
+### AlpacaFeed
+
+```python
+from delta_theta_matrix.feeds import AlpacaFeed
+
+# Reads ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_PAPER env vars
+feed = AlpacaFeed()
+feed.connect()
+feed.subscribe(["MU", "AMD"])
+
+# Options chain snapshots
+chain = feed.get_options_chain("MU", expiration_gte="2026-03-01")
+
+# Latest stock quotes
+quotes = feed.get_quotes(["MU", "AMD"])
+
+# Historical bars
+bars = feed.get_history("MU", timeframe="1Day", start="2026-01-01", end="2026-02-01")
+
+feed.disconnect()
+```
+
+| Env Variable | Description | Default |
+|---|---|---|
+| `ALPACA_API_KEY` | Alpaca API key ID | *(required)* |
+| `ALPACA_SECRET_KEY` | Alpaca secret key | *(required)* |
+| `ALPACA_PAPER` | `"true"` for paper trading, `"false"` for live | `"true"` |
+
+### Using feeds with `run_live()`
+
+Both feeds are drop-in replacements for the default `WebSocketFeed`:
+
+```python
+from delta_theta_matrix.live import run_live, SignalBus
+from delta_theta_matrix.feeds import TradierFeed
+
+feed = TradierFeed()
 bus = SignalBus()
 bus.register_callback(lambda signal: print(signal.to_json()))
 
