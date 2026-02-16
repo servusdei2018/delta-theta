@@ -57,17 +57,25 @@ A high-performance algorithmic trading harness that dynamically resizes multi-le
 
 - Rust toolchain (1.70+)
 - Python 3.10+
-- [Maturin](https://github.com/PyO3/maturin) (`pip install maturin`)
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip (fallback)
 
 ### Build
 
 ```bash
-# Install Python dependencies
-pip install maturin gymnasium "stable-baselines3[extra]" numpy polars plotly torch kaleido
+# Create a virtual environment and install dependencies
+uv venv
+uv pip install -e ".[dev]"
 
 # Build and install the Rust extension
-maturin develop --release
+uv run maturin develop --release
 ```
+
+> **Note:** If you don't have `uv`, you can fall back to pip:
+> ```bash
+> python -m venv .venv && source .venv/bin/activate
+> pip install -e ".[dev]"
+> maturin develop --release
+> ```
 
 ### Train
 
@@ -183,13 +191,13 @@ reward = θ_captured − (margin_utilization³) × penalty_scale + P&L × 0.01
 cargo test
 
 # Build in debug mode
-maturin develop
+uv run maturin develop
 
 # Build optimized release
-maturin develop --release
+uv run maturin develop --release
 
 # Monitor training with TensorBoard
-tensorboard --logdir output/*/tensorboard
+uv run tensorboard --logdir output/*/tensorboard
 ```
 
 ## License
