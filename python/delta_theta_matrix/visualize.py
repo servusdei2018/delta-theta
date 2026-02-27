@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +95,6 @@ def create_3d_surface(
                 z_grid[i, j] = width_arr[mask].mean()
 
     # Interpolate NaN values for smoother surface
-    from scipy import ndimage
 
     # Simple nearest-neighbor fill for NaN values
     mask = np.isnan(z_grid)

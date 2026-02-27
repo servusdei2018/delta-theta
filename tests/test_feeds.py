@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from delta_theta_matrix.feeds.alpaca_feed import AlpacaFeed, AlpacaFeedError
-from delta_theta_matrix.feeds.tradier_feed import TradierFeed, TradierFeedError
+from delta_theta_matrix.feeds.alpaca_feed import AlpacaFeed
+from delta_theta_matrix.feeds.tradier_feed import TradierFeed
 
 
 # ── AlpacaFeed tests ─────────────────────────────────────────────────────

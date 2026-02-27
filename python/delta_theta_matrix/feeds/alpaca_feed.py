@@ -95,14 +95,19 @@ class AlpacaFeed(MarketDataFeed):
     def connect(self) -> None:
         """Open an HTTP client session to Alpaca."""
         import datetime
-        self._client = pyreqwest._pyreqwest.client.ClientBuilder() \
-            .default_headers({
-                "APCA-API-KEY-ID": self._api_key,
-                "APCA-API-SECRET-KEY": self._secret_key,
-                "Accept": "application/json",
-            }) \
-            .timeout(datetime.timedelta(seconds=self._timeout)) \
+
+        self._client = (
+            pyreqwest._pyreqwest.client.ClientBuilder()
+            .default_headers(
+                {
+                    "APCA-API-KEY-ID": self._api_key,
+                    "APCA-API-SECRET-KEY": self._secret_key,
+                    "Accept": "application/json",
+                }
+            )
+            .timeout(datetime.timedelta(seconds=self._timeout))
             .build()
+        )
         mode = "paper" if self._paper else "live"
         logger.info("AlpacaFeed connected (%s)", mode)
 
