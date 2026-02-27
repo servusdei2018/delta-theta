@@ -7,10 +7,13 @@ license = "MIT"
 
 [lib]
 name = "delta_theta_matrix"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-pyo3 = { version = "0.24", features = ["extension-module"] }
+pyo3 = { version = "0.24" }
 numpy = "0.24"
 polars = { version = "0.46", features = ["lazy"] }
 tokio = { version = "1", features = ["full"] }

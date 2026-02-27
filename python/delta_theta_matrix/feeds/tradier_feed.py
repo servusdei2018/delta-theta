@@ -26,9 +26,10 @@ Usage:
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any, Callable
 
 import pyreqwest
@@ -86,13 +87,20 @@ class TradierFeed(MarketDataFeed):
 
     def connect(self) -> None:
         """Open an HTTP client session to Tradier."""
-        self._client = pyreqwest.Client(
-            base_url=self._base_url,
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Accept": "application/json",
-            },
-            timeout=self._timeout,
+        base_url = (
+            self._base_url if self._base_url.endswith("/") else self._base_url + "/"
+        )
+        self._client = (
+            pyreqwest._pyreqwest.client.ClientBuilder()
+            .base_url(base_url)
+            .default_headers(
+                {
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Accept": "application/json",
+                }
+            )
+            .timeout(datetime.timedelta(seconds=self._timeout))
+            .build()
         )
         mode = "sandbox" if self._sandbox else "production"
         logger.info("TradierFeed connected (%s)", mode)
@@ -263,7 +271,7 @@ class TradierFeed(MarketDataFeed):
                     "volume": q.get("volume"),
                     "change": q.get("change"),
                     "change_pct": q.get("change_percentage"),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.datetime.now(timezone.utc).isoformat(),
                 }
             )
 

@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import (
     BaseCallback,

@@ -24,6 +24,6 @@ dependencies = [
 dev = ["ruff>=0.11", "pytest>=8.0"]
 
 [tool.maturin]
-features = ["pyo3/extension-module"]
+features = ["extension-module"]
 python-source = "python"
 module-name = "delta_theta_matrix._native"

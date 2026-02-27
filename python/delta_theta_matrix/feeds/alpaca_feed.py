@@ -26,9 +26,10 @@ Usage:
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any, Callable
 
 import pyreqwest
@@ -94,13 +95,17 @@ class AlpacaFeed(MarketDataFeed):
 
     def connect(self) -> None:
         """Open an HTTP client session to Alpaca."""
-        self._client = pyreqwest.Client(
-            headers={
-                "APCA-API-KEY-ID": self._api_key,
-                "APCA-API-SECRET-KEY": self._secret_key,
-                "Accept": "application/json",
-            },
-            timeout=self._timeout,
+        self._client = (
+            pyreqwest._pyreqwest.client.ClientBuilder()
+            .default_headers(
+                {
+                    "APCA-API-KEY-ID": self._api_key,
+                    "APCA-API-SECRET-KEY": self._secret_key,
+                    "Accept": "application/json",
+                }
+            )
+            .timeout(datetime.timedelta(seconds=self._timeout))
+            .build()
         )
         mode = "paper" if self._paper else "live"
         logger.info("AlpacaFeed connected (%s)", mode)
@@ -268,7 +273,9 @@ class AlpacaFeed(MarketDataFeed):
                 "ask": q.get("ap"),
                 "bid_size": q.get("bs"),
                 "ask_size": q.get("as"),
-                "timestamp": q.get("t", datetime.now(timezone.utc).isoformat()),
+                "timestamp": q.get(
+                    "t", datetime.datetime.now(timezone.utc).isoformat()
+                ),
             }
             # Derive a mid-price for the tick callback
             bid = q.get("bp", 0) or 0
