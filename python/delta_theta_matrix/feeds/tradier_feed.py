@@ -86,14 +86,16 @@ class TradierFeed(MarketDataFeed):
 
     def connect(self) -> None:
         """Open an HTTP client session to Tradier."""
-        self._client = pyreqwest.Client(
-            base_url=self._base_url,
-            headers={
+        import datetime
+        base_url = self._base_url if self._base_url.endswith("/") else self._base_url + "/"
+        self._client = pyreqwest._pyreqwest.client.ClientBuilder() \
+            .base_url(base_url) \
+            .default_headers({
                 "Authorization": f"Bearer {self._api_key}",
                 "Accept": "application/json",
-            },
-            timeout=self._timeout,
-        )
+            }) \
+            .timeout(datetime.timedelta(seconds=self._timeout)) \
+            .build()
         mode = "sandbox" if self._sandbox else "production"
         logger.info("TradierFeed connected (%s)", mode)
 

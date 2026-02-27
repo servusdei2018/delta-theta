@@ -23,6 +23,7 @@ pub mod state;
 /// - `get_state_vector()` — zero-copy NumPy state extraction
 /// - `get_state_dim()` — dimensionality of the state vector
 #[pymodule]
+#[pyo3(name = "_native")]
 fn delta_theta_matrix(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<engine::BacktestEngine>()?;
     m.add_class::<engine::EngineConfig>()?;
