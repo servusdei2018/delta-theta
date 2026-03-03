@@ -276,57 +276,74 @@ impl BacktestEngine {
         self.current_tte -= self.config.time_decay_per_tick;
         self.current_tte = self.current_tte.max(0.001);
 
-        // Execute the put credit spread trade on the first underlying
-        let trade_result = self.execute_spread_trade(strike_width, delta_position);
+        // Execute the put credit spread trade on all underlying assets
+        let mut total_pnl = 0.0;
+        let mut errors = Vec::new();
+        
+        for book in &self.order_books {
+            match self.execute_spread_trade_on_book(book, strike_width, delta_position) {
+                Ok(pnl) => total_pnl += pnl,
+                Err(e) => errors.push(format!("{}: {}", book.ticker, e)),
+            }
+        }
+
+        self.episode_pnl += total_pnl;
+
+        // Check for early assignment on all positions (pass each book's price)
+        for book in &self.order_books {
+            self.risk_state.check_early_assignment(
+                book.underlying_price,
+                self.config.early_assignment_threshold,
+            );
+        }
+
+        // Update mark-to-market using current market IVs for each position
+        if !self.risk_state.positions.is_empty() {
+            // Collect current IVs for all positions (match positions to their order books by ticker)
+            let market_ivs: Vec<f64> = self.risk_state.positions.iter()
+                .map(|pos| {
+                    // Find the order book for this ticker
+                    self.order_books.iter()
+                        .find(|book| book.ticker == pos.ticker)
+                        .and_then(|book| {
+                            // Find the IV for the short strike in this position
+                            book.book_for_strike(pos.spread.short_leg.strike)
+                                .map(|opt_book| opt_book.implied_vol)
+                        })
+                        .unwrap_or(self.current_iv) // Fallback to current IV if not found
+                })
+                .collect();
+
+            // Update mark-to-market with current IVs
+            let _ = self.risk_state.update_mark_to_market(
+                // Use first underlying price as default for calculation (or handle per asset)
+                self.order_books.first().map(|b| b.underlying_price).unwrap_or(100.0),
+                self.config.risk_free_rate,
+                self.current_tte,
+                &market_ivs,
+            );
+        }
 
         // Calculate step reward
-        let (reward, info) = match trade_result {
-            Ok(pnl) => {
-                self.episode_pnl += pnl;
+        let theta_captured = self.risk_state.total_theta_exposure().abs();
+        let margin_ratio = self.risk_state.margin_utilization();
 
-                // Check for early assignment
-                if let Some(book) = self.order_books.first() {
-                    self.risk_state.check_early_assignment(
-                        book.underlying_price,
-                        self.config.early_assignment_threshold,
-                    );
-                }
+        // Reward = theta captured - cubic penalty for margin expansion + P&L
+        let reward = theta_captured - margin_ratio.powi(3) * 10.0 + total_pnl * 0.01;
 
-                // Update mark-to-market using actual IV from market data
-                if let Some(book) = self.order_books.first() {
-                    let _ = self.risk_state.update_mark_to_market(
-                        book.underlying_price,
-                        self.config.risk_free_rate,
-                        self.current_tte,
-                    );
-                }
+        let mut info = serde_json::json!({
+            "pnl": total_pnl,
+            "episode_pnl": self.episode_pnl,
+            "margin_utilization": margin_ratio,
+            "theta_exposure": theta_captured,
+            "current_iv": self.current_iv,
+            "tte": self.current_tte,
+            "positions": self.risk_state.position_count(),
+        });
 
-                let theta_captured = self.risk_state.total_theta_exposure().abs();
-                let margin_ratio = self.risk_state.margin_utilization();
-
-                // Reward = theta captured - cubic penalty for margin expansion
-                let reward = theta_captured - margin_ratio.powi(3) * 10.0 + pnl * 0.01;
-
-                let info = serde_json::json!({
-                    "pnl": pnl,
-                    "episode_pnl": self.episode_pnl,
-                    "margin_utilization": margin_ratio,
-                    "theta_exposure": theta_captured,
-                    "current_iv": self.current_iv,
-                    "tte": self.current_tte,
-                    "positions": self.risk_state.position_count(),
-                });
-
-                (reward, info.to_string())
-            }
-            Err(e) => {
-                let info = serde_json::json!({
-                    "error": e,
-                    "episode_pnl": self.episode_pnl,
-                });
-                (-0.1, info.to_string()) // Small penalty for failed trades
-            }
-        };
+        if !errors.is_empty() {
+            info["errors"] = serde_json::json!(errors);
+        }
 
         // Check termination conditions
         let margin_call = self.risk_state.check_margin_call();
@@ -350,7 +367,7 @@ impl BacktestEngine {
             reward: final_reward,
             done,
             truncated,
-            info,
+            info: info.to_string(),
         })
     }
 
@@ -467,20 +484,16 @@ impl BacktestEngine {
         }
     }
 
-    /// Execute a put credit spread trade.
+    /// Execute a put credit spread trade on a specific underlying.
     ///
     /// Finds appropriate strikes based on the requested width and delta,
     /// prices the spread, and opens the position with actual IV from market data.
-    fn execute_spread_trade(
+    fn execute_spread_trade_on_book(
         &mut self,
+        book: &UnderlyingOrderBook,
         strike_width: f64,
         delta_position: f64,
     ) -> Result<f64, String> {
-        let book = self
-            .order_books
-            .first()
-            .ok_or_else(|| "No order books available".to_string())?;
-
         let underlying_price = book.underlying_price;
 
         // Find the short strike: closest to the target delta

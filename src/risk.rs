@@ -375,8 +375,7 @@ impl RiskState {
     /// Update risk state based on current market conditions.
     ///
     /// Recalculates margin requirements and buying power based on current P&L.
-    /// Uses actual implied volatility from market data for each position rather
-    /// than a hardcoded value.
+    /// Uses current market IV provided for each position rather than entry IV.
     ///
     /// Returns `Ok(0.0)` for empty portfolios.
     ///
@@ -384,6 +383,7 @@ impl RiskState {
     /// * `underlying_price` - Current underlying price
     /// * `r` - Risk-free rate
     /// * `t` - Time to expiration in years
+    /// * `market_ivs` - Current market implied volatility for each position (must match position count)
     ///
     /// # Returns
     /// Total unrealized P&L across all positions.
@@ -392,17 +392,25 @@ impl RiskState {
         underlying_price: f64,
         r: f64,
         t: f64,
+        market_ivs: &[f64],
     ) -> Result<f64, String> {
         // Guard: empty portfolio has zero P&L
         if self.positions.is_empty() {
             return Ok(0.0);
         }
 
+        if market_ivs.len() != self.positions.len() {
+            return Err(format!(
+                "Market IV count ({}) does not match position count ({})",
+                market_ivs.len(),
+                self.positions.len()
+            ));
+        }
+
         let mut total_pnl = 0.0;
 
-        for position in &self.positions {
-            // FIXED: Use actual IV from the position's entry data instead of hardcoded 0.25
-            let sigma = position.entry_iv;
+        for (i, position) in self.positions.iter().enumerate() {
+            let sigma = market_ivs[i];
 
             // Guard against zero or negative IV
             let sigma = if sigma <= MONEY_EPSILON { 0.25 } else { sigma };
@@ -487,6 +495,25 @@ impl RiskState {
             .iter()
             .map(|p| p.spread.net_theta() * p.quantity as f64)
             .sum()
+    }
+
+    /// Close a specific position by index.
+    ///
+    /// # Arguments
+    /// * `index` - Index of the position to close
+    ///
+    /// # Returns
+    /// Ok(()) if the position was closed, Err if index is invalid
+    pub fn close_position(&mut self, index: usize) -> Result<(), String> {
+        if index >= self.positions.len() {
+            return Err(format!("Position index {} out of bounds (0-{})", index, self.positions.len() - 1));
+        }
+
+        let position = self.positions.remove(index);
+        self.buying_power += position.margin_required;
+        self.margin_used -= position.margin_required;
+
+        Ok(())
     }
 
     /// Close all positions and reset margin.
