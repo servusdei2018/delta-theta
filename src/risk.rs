@@ -501,6 +501,44 @@ impl RiskState {
     pub fn position_count(&self) -> usize {
         self.positions.len()
     }
+
+    /// Liquidate positions to resolve a margin call.
+    ///
+    /// This method will close positions until the margin call condition is resolved.
+    /// Positions are liquidated in the order of highest margin usage first.
+    ///
+    /// # Returns
+    /// Number of positions liquidated.
+    pub fn liquidate_positions(&mut self) -> usize {
+        let mut positions_liquidated = 0;
+
+        // Continue liquidating as long as margin call condition exists and we have positions
+        while self.check_margin_call() && !self.positions.is_empty() {
+            // Find the position with the highest margin usage
+            if let Some(pos_idx) = self.positions
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.margin_required.partial_cmp(&b.margin_required).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(idx, _)| idx) {
+                
+                // Remove the position from the portfolio
+                let position = self.positions.remove(pos_idx);
+                
+                // Restore margin and buying power
+                self.margin_used -= position.margin_required;
+                self.buying_power += position.margin_required;
+                
+                positions_liquidated += 1;
+            }
+        }
+
+        // If all positions were liquidated, ensure margin call flag is cleared
+        if self.positions.is_empty() {
+            self.margin_call_triggered = false;
+        }
+
+        positions_liquidated
+    }
 }
 
 #[cfg(test)]

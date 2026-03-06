@@ -47,7 +47,20 @@ impl OptionOrderBook {
     /// * `theo_price` - Theoretical mid price from Black-Scholes
     /// * `implied_vol` - Implied volatility for this strike
     /// * `base_spread` - Base bid-ask spread as a fraction of theo price
-    pub fn new(strike: f64, theo_price: f64, implied_vol: f64, base_spread: f64) -> Self {
+    pub fn new(strike: f64, theo_price: f64, implied_vol: f64, base_spread: f64) -> Result<Self, String> {
+        if strike <= 0.0 {
+            return Err("Strike price must be positive".to_string());
+        }
+        if theo_price < 0.0 {
+            return Err("Theoretical price must be non-negative".to_string());
+        }
+        if implied_vol <= 0.0 {
+            return Err("Implied volatility must be positive".to_string());
+        }
+        if base_spread < 0.0 {
+            return Err("Base spread must be non-negative".to_string());
+        }
+
         let half_spread = (theo_price * base_spread / 2.0).max(0.01);
         let tick_size = 0.01;
 
@@ -70,13 +83,13 @@ impl OptionOrderBook {
             })
             .collect();
 
-        OptionOrderBook {
+        Ok(OptionOrderBook {
             strike,
             bids,
             asks,
             theo_mid: theo_price,
             implied_vol,
-        }
+        })
     }
 
     /// Get the best bid price.
@@ -192,12 +205,28 @@ impl UnderlyingOrderBook {
             return Err("Strikes and implied_vols must have the same length".to_string());
         }
 
+        if underlying_price <= 0.0 {
+            return Err("Underlying price must be positive".to_string());
+        }
+
+        for &strike in strikes {
+            if strike <= 0.0 {
+                return Err(format!("Strike price must be positive, got: {}", strike));
+            }
+        }
+
+        for &iv in implied_vols {
+            if iv <= 0.0 {
+                return Err(format!("Implied volatility must be positive, got: {}", iv));
+            }
+        }
+
         let mut option_books = Vec::with_capacity(strikes.len());
         for (i, &strike) in strikes.iter().enumerate() {
             let sigma = implied_vols[i];
             let theo_price = crate::options::black_scholes_put(underlying_price, strike, r, sigma, t)?;
             let base_spread = 0.05 + 0.02 * (strike - underlying_price).abs() / underlying_price;
-            option_books.push(OptionOrderBook::new(strike, theo_price, sigma, base_spread));
+            option_books.push(OptionOrderBook::new(strike, theo_price, sigma, base_spread)?);
         }
 
         Ok(UnderlyingOrderBook {
